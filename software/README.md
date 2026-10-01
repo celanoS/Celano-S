@@ -3,7 +3,6 @@
 This folder contains the software architecture and program documentation for the Smart Sea Belt system.
 
 ## Software Modules
-
 - Smart Watch Firmware
 - Boat Hub Firmware
 - Base Unit Firmware
