@@ -1,0 +1,574 @@
+/*
+  SMART SEA BELT
+  Smart Watch Firmware - Prototype
+
+  Controller:
+    ESP32-C3
+
+  Sensors:
+    MAX30102  -> Heart-rate monitoring
+    MPU6050   -> Motion monitoring
+
+  Inputs:
+    SOS button
+
+  Outputs:
+    LED
+    Buzzer
+
+  Communication:
+    Bluetooth Low Energy (BLE)
+
+  NOTE:
+    This is a prototype firmware for development/testing.
+    It is NOT a certified marine safety device.
+*/
+
+#include <Wire.h>
+#include <Adafruit_MPU6050.h>
+#include <Adafruit_Sensor.h>
+#include <MAX30105.h>
+#include "heartRate.h"
+
+#include <BLEDevice.h>
+#include <BLEServer.h>
+#include <BLEUtils.h>
+#include <BLE2902.h>
+
+// --------------------------------------------------
+// PIN CONFIGURATION
+// --------------------------------------------------
+
+#define SDA_PIN 8
+#define SCL_PIN 9
+
+#define SOS_BUTTON_PIN 4
+#define BUZZER_PIN     5
+#define LED_PIN        6
+
+// --------------------------------------------------
+// BLE UUIDs
+// --------------------------------------------------
+
+#define SERVICE_UUID        "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
+#define CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
+
+// --------------------------------------------------
+// SENSOR OBJECTS
+// --------------------------------------------------
+
+Adafruit_MPU6050 mpu;
+MAX30105 particleSensor;
+
+BLECharacteristic *dataCharacteristic;
+bool deviceConnected = false;
+
+// --------------------------------------------------
+// HEART RATE VARIABLES
+// --------------------------------------------------
+
+long lastBeat = 0;
+
+float heartRate = 0;
+int beatAvg = 0;
+
+const byte RATE_SIZE = 4;
+byte rates[RATE_SIZE];
+byte rateSpot = 0;
+
+// --------------------------------------------------
+// MOTION VARIABLES
+// --------------------------------------------------
+
+float accelerationX = 0;
+float accelerationY = 0;
+float accelerationZ = 0;
+
+float totalAcceleration = 0;
+
+// Simple fall threshold for prototype testing
+const float FALL_THRESHOLD = 0.45;
+
+// --------------------------------------------------
+// TIMERS
+// --------------------------------------------------
+
+unsigned long lastSensorRead = 0;
+unsigned long lastBLEUpdate = 0;
+
+const unsigned long SENSOR_INTERVAL = 100;
+const unsigned long BLE_INTERVAL = 1000;
+
+// --------------------------------------------------
+// EMERGENCY STATUS
+// --------------------------------------------------
+
+bool sosActive = false;
+bool fallDetected = false;
+bool abnormalHeartRate = false;
+
+// --------------------------------------------------
+// BLE CALLBACK
+// --------------------------------------------------
+
+class ServerCallbacks : public BLEServerCallbacks
+{
+  void onConnect(BLEServer *server)
+  {
+    deviceConnected = true;
+
+    Serial.println("BLE device connected");
+
+    digitalWrite(LED_PIN, HIGH);
+  }
+
+  void onDisconnect(BLEServer *server)
+  {
+    deviceConnected = false;
+
+    Serial.println("BLE device disconnected");
+
+    digitalWrite(LED_PIN, LOW);
+
+    BLEDevice::startAdvertising();
+  }
+};
+
+// --------------------------------------------------
+// BUZZER ALERT
+// --------------------------------------------------
+
+void emergencyAlert()
+{
+  digitalWrite(BUZZER_PIN, HIGH);
+  delay(200);
+  digitalWrite(BUZZER_PIN, LOW);
+
+  delay(100);
+
+  digitalWrite(BUZZER_PIN, HIGH);
+  delay(200);
+  digitalWrite(BUZZER_PIN, LOW);
+}
+
+// --------------------------------------------------
+// READ SOS BUTTON
+// --------------------------------------------------
+
+void checkSOS()
+{
+  if (digitalRead(SOS_BUTTON_PIN) == LOW)
+  {
+    if (!sosActive)
+    {
+      sosActive = true;
+
+      Serial.println("================================");
+      Serial.println("SOS EMERGENCY ACTIVATED");
+      Serial.println("================================");
+
+      emergencyAlert();
+    }
+  }
+}
+
+// --------------------------------------------------
+// READ HEART RATE
+// --------------------------------------------------
+
+void readHeartRate()
+{
+  long irValue = particleSensor.getIR();
+
+  if (checkForBeat(irValue))
+  {
+    long delta = millis() - lastBeat;
+
+    lastBeat = millis();
+
+    heartRate = 60.0 / (delta / 1000.0);
+
+    if (heartRate > 20 && heartRate < 255)
+    {
+      rates[rateSpot++] = (byte)heartRate;
+
+      rateSpot %= RATE_SIZE;
+
+      beatAvg = 0;
+
+      for (byte i = 0; i < RATE_SIZE; i++)
+      {
+        beatAvg += rates[i];
+      }
+
+      beatAvg /= RATE_SIZE;
+    }
+  }
+
+  /*
+    Prototype abnormal-heart-rate rule.
+
+    This is NOT a medical diagnostic threshold.
+    It is only used to demonstrate emergency logic.
+  */
+
+  if (beatAvg > 0)
+  {
+    if (beatAvg < 45 || beatAvg > 130)
+    {
+      abnormalHeartRate = true;
+    }
+    else
+    {
+      abnormalHeartRate = false;
+    }
+  }
+}
+
+// --------------------------------------------------
+// READ MOTION
+// --------------------------------------------------
+
+void readMotion()
+{
+  sensors_event_t acceleration;
+  sensors_event_t gyro;
+  sensors_event_t temperature;
+
+  mpu.getEvent(
+    &acceleration,
+    &gyro,
+    &temperature
+  );
+
+  accelerationX = acceleration.acceleration.x;
+  accelerationY = acceleration.acceleration.y;
+  accelerationZ = acceleration.acceleration.z;
+
+  totalAcceleration =
+      sqrt(
+        accelerationX * accelerationX +
+        accelerationY * accelerationY +
+        accelerationZ * accelerationZ
+      );
+
+  /*
+    Approximate fall/event detection.
+
+    This is only a prototype algorithm.
+    It should NOT be treated as a validated
+    man-overboard or fall-detection algorithm.
+  */
+
+  if (totalAcceleration < FALL_THRESHOLD)
+  {
+    fallDetected = true;
+
+    Serial.println("Possible fall detected");
+
+    emergencyAlert();
+  }
+}
+
+// --------------------------------------------------
+// SEND BLE DATA
+// --------------------------------------------------
+
+void sendBLEData()
+{
+  if (!deviceConnected)
+  {
+    return;
+  }
+
+  String message = "";
+
+  message += "HR:";
+  message += String(beatAvg);
+
+  message += ",ACC:";
+  message += String(totalAcceleration, 2);
+
+  message += ",SOS:";
+  message += String(sosActive ? 1 : 0);
+
+  message += ",FALL:";
+  message += String(fallDetected ? 1 : 0);
+
+  message += ",ABNORMAL_HR:";
+  message += String(abnormalHeartRate ? 1 : 0);
+
+  dataCharacteristic->setValue(message.c_str());
+
+  dataCharacteristic->notify();
+
+  Serial.print("BLE DATA: ");
+  Serial.println(message);
+}
+
+// --------------------------------------------------
+// PRINT STATUS
+// --------------------------------------------------
+
+void printStatus()
+{
+  Serial.println();
+  Serial.println("--------------------------------");
+  Serial.println("SMART SEA BELT STATUS");
+  Serial.println("--------------------------------");
+
+  Serial.print("Heart Rate: ");
+  Serial.print(beatAvg);
+  Serial.println(" BPM");
+
+  Serial.print("Acceleration: ");
+  Serial.println(totalAcceleration);
+
+  Serial.print("SOS: ");
+  Serial.println(sosActive ? "ACTIVE" : "NORMAL");
+
+  Serial.print("Fall: ");
+  Serial.println(fallDetected ? "DETECTED" : "NORMAL");
+
+  Serial.print("Abnormal HR: ");
+  Serial.println(
+    abnormalHeartRate ? "YES" : "NO"
+  );
+
+  Serial.print("BLE: ");
+  Serial.println(
+    deviceConnected ? "CONNECTED" : "DISCONNECTED"
+  );
+
+  Serial.println("--------------------------------");
+}
+
+// --------------------------------------------------
+// SETUP
+// --------------------------------------------------
+
+void setup()
+{
+  Serial.begin(115200);
+
+  delay(1000);
+
+  Serial.println();
+  Serial.println("================================");
+  Serial.println("SMART SEA BELT SMART WATCH");
+  Serial.println("Firmware Starting...");
+  Serial.println("================================");
+
+  // ------------------------------------------------
+  // GPIO
+  // ------------------------------------------------
+
+  pinMode(
+    SOS_BUTTON_PIN,
+    INPUT_PULLUP
+  );
+
+  pinMode(
+    BUZZER_PIN,
+    OUTPUT
+  );
+
+  pinMode(
+    LED_PIN,
+    OUTPUT
+  );
+
+  digitalWrite(BUZZER_PIN, LOW);
+  digitalWrite(LED_PIN, LOW);
+
+  // ------------------------------------------------
+  // I2C
+  // ------------------------------------------------
+
+  Wire.begin(
+    SDA_PIN,
+    SCL_PIN
+  );
+
+  // ------------------------------------------------
+  // MPU6050
+  // ------------------------------------------------
+
+  Serial.println("Initializing MPU6050...");
+
+  if (!mpu.begin())
+  {
+    Serial.println(
+      "ERROR: MPU6050 not detected!"
+    );
+
+    while (1)
+    {
+      digitalWrite(
+        LED_PIN,
+        !digitalRead(LED_PIN)
+      );
+
+      delay(500);
+    }
+  }
+
+  Serial.println(
+    "MPU6050 initialized."
+  );
+
+  mpu.setAccelerometerRange(
+    MPU6050_RANGE_8_G
+  );
+
+  mpu.setGyroRange(
+    MPU6050_RANGE_500_DEG
+  );
+
+  // ------------------------------------------------
+  // MAX30102
+  // ------------------------------------------------
+
+  Serial.println("Initializing MAX30102...");
+
+  if (!particleSensor.begin(
+        Wire,
+        I2C_SPEED_FAST
+      ))
+  {
+    Serial.println(
+      "ERROR: MAX30102 not detected!"
+    );
+
+    while (1)
+    {
+      digitalWrite(
+        LED_PIN,
+        !digitalRead(LED_PIN)
+      );
+
+      delay(200);
+    }
+  }
+
+  Serial.println(
+    "MAX30102 initialized."
+  );
+
+  particleSensor.setup();
+
+  particleSensor.setPulseAmplitudeRed(
+    0x0A
+  );
+
+  particleSensor.setPulseAmplitudeGreen(
+    0
+  );
+
+  // ------------------------------------------------
+  // BLE
+  // ------------------------------------------------
+
+  Serial.println("Starting BLE...");
+
+  BLEDevice::init(
+    "SmartSeaBelt-Watch"
+  );
+
+  BLEServer *server =
+      BLEDevice::createServer();
+
+  server->setCallbacks(
+    new ServerCallbacks()
+  );
+
+  BLEService *service =
+      server->createService(
+        SERVICE_UUID
+      );
+
+  dataCharacteristic =
+      service->createCharacteristic(
+        CHARACTERISTIC_UUID,
+        BLECharacteristic::PROPERTY_READ |
+        BLECharacteristic::PROPERTY_NOTIFY
+      );
+
+  dataCharacteristic->addDescriptor(
+    new BLE2902()
+  );
+
+  dataCharacteristic->setValue(
+    "Smart Sea Belt Ready"
+  );
+
+  service->start();
+
+  BLEAdvertising *advertising =
+      BLEDevice::getAdvertising();
+
+  advertising->addServiceUUID(
+    SERVICE_UUID
+  );
+
+  advertising->setScanResponse(
+    true
+  );
+
+  advertising->setMinPreferred(
+    0x06
+  );
+
+  advertising->setMinPreferred(
+    0x12
+  );
+
+  BLEDevice::startAdvertising();
+
+  Serial.println(
+    "BLE advertising started."
+  );
+
+  Serial.println();
+  Serial.println(
+    "Smart Watch Ready."
+  );
+}
+
+// --------------------------------------------------
+// MAIN LOOP
+// --------------------------------------------------
+
+void loop()
+{
+  // Check SOS continuously
+  checkSOS();
+
+  // Read sensors periodically
+  if (
+    millis() - lastSensorRead >=
+    SENSOR_INTERVAL
+  )
+  {
+    lastSensorRead = millis();
+
+    readHeartRate();
+
+    readMotion();
+  }
+
+  // Send data through BLE
+  if (
+    millis() - lastBLEUpdate >=
+    BLE_INTERVAL
+  )
+  {
+    lastBLEUpdate = millis();
+
+    sendBLEData();
+
+    printStatus();
+  }
+
+  delay(10);
+}
