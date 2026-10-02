@@ -1,0 +1,139 @@
+# Smart Sea Belt System Architecture
+
+The Smart Sea Belt is designed as an integrated marine safety system consisting of a wearable Smart Watch, Boat Hub, and Base Unit.
+
+## System Architecture
+
+```text
++----------------------+
+|     SMART WATCH      |
+|----------------------|
+| ESP32-C3             |
+| MAX30102             |
+| MPU6050              |
+| SOS Button           |
+| GPS                  |
++----------+-----------+
+           |
+           | BLE
+           v
++----------------------+
+|      BOAT HUB        |
+|----------------------|
+| ESP32-S3             |
+| BLE                  |
+| GPS / NavIC          |
+| LoRa                 |
+| Emergency Processing |
++----------+-----------+
+           |
+           | LoRa
+           v
++----------------------+
+|      BASE UNIT       |
+|----------------------|
+| Controller           |
+| LoRa Receiver       |
+| Display / Alerts     |
++----------+-----------+
+           |
+           v
+   Monitoring Platform
+```
+
+## 1. Smart Watch
+
+The Smart Watch is the wearable safety unit.
+
+It collects:
+
+- Heart-rate information
+- Motion information
+- Location information
+- SOS status
+
+The ESP32-C3 processes the sensor information and communicates with the Boat Hub through Bluetooth Low Energy (BLE).
+
+## 2. Boat Hub
+
+The Boat Hub acts as the central communication and processing unit on the boat.
+
+It:
+
+- Receives Smart Watch information
+- Processes emergency information
+- Monitors boat location
+- Communicates with the Base Unit using LoRa
+- Provides an interface for the rudder mechanism
+
+## 3. Base Unit
+
+The Base Unit receives information from the Boat Hub through LoRa.
+
+It is responsible for:
+
+- Receiving safety information
+- Processing emergency messages
+- Providing local alerts
+- Displaying monitoring information
+- Supporting future cloud connectivity
+
+## Communication Flow
+
+```text
+Smart Watch
+     |
+     | Bluetooth Low Energy
+     v
+Boat Hub
+     |
+     | LoRa
+     v
+Base Unit
+     |
+     v
+Monitoring / Alerts
+```
+
+## Emergency Flow
+
+```text
+Sensor / SOS Event
+        |
+        v
+Smart Watch
+        |
+        | BLE
+        v
+Boat Hub
+        |
+        | Emergency Processing
+        v
+LoRa Transmission
+        |
+        v
+Base Unit
+        |
+        v
+Emergency Alert
+```
+
+## Future Connectivity
+
+The architecture can be extended with cellular and cloud connectivity for remote monitoring.
+
+Possible future flow:
+
+```text
+Smart Watch
+     ↓ BLE
+Boat Hub
+     ↓ LoRa / Cellular
+Cloud Platform
+     ↓
+Mobile Application
+```
+
+## Development Status
+
+The architecture represents the proposed prototype system. Individual communication links, sensors, emergency detection logic, and mechanical mechanisms require hardware-level testing and validation before the system can be considered operational.
