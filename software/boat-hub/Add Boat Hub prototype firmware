@@ -1,0 +1,736 @@
+/*
+  SMART SEA BELT
+  Boat Hub Firmware - Prototype
+
+  Controller:
+    ESP32-S3
+
+  Functions:
+    - Receive Smart Watch data through BLE
+    - Monitor emergency conditions
+    - Read boat GPS
+    - Transmit emergency data through LoRa
+    - Activate local buzzer
+    - Provide rudder actuator control interface
+
+  NOTE:
+    Prototype firmware for development/testing.
+    Not a certified marine safety system.
+*/
+
+#include <Wire.h>
+
+#include <BLEDevice.h>
+#include <BLEUtils.h>
+#include <BLEScan.h>
+#include <BLEAdvertisedDevice.h>
+
+#include <TinyGPSPlus.h>
+#include <HardwareSerial.h>
+
+// --------------------------------------------------
+// PIN CONFIGURATION
+// --------------------------------------------------
+
+#define BUZZER_PIN 5
+#define STATUS_LED 6
+
+// LoRa UART pins
+#define LORA_RX 16
+#define LORA_TX 17
+
+// GPS UART pins
+#define GPS_RX 18
+#define GPS_TX 19
+
+// Rudder actuator control
+#define RUDDER_PIN 7
+
+// --------------------------------------------------
+// BLE UUIDs
+// Must match Smart Watch firmware
+// --------------------------------------------------
+
+#define SERVICE_UUID        "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
+#define CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
+
+// --------------------------------------------------
+// OBJECTS
+// --------------------------------------------------
+
+BLEScan *bleScan;
+
+TinyGPSPlus gps;
+
+HardwareSerial LoRaSerial(1);
+HardwareSerial GPSSerial(2);
+
+// --------------------------------------------------
+// SMART WATCH DATA
+// --------------------------------------------------
+
+int heartRate = 0;
+
+float acceleration = 0;
+
+bool sosActive = false;
+bool fallDetected = false;
+bool abnormalHeartRate = false;
+
+bool watchConnected = false;
+
+// --------------------------------------------------
+// GPS DATA
+// --------------------------------------------------
+
+double latitude = 0.0;
+double longitude = 0.0;
+
+bool gpsAvailable = false;
+
+// --------------------------------------------------
+// TIMERS
+// --------------------------------------------------
+
+unsigned long lastBLEScan = 0;
+unsigned long lastLoRaSend = 0;
+unsigned long lastGPSRead = 0;
+
+const unsigned long BLE_SCAN_INTERVAL = 5000;
+const unsigned long LORA_INTERVAL = 2000;
+
+// --------------------------------------------------
+// EMERGENCY STATUS
+// --------------------------------------------------
+
+bool emergencyActive = false;
+
+// --------------------------------------------------
+// EMERGENCY ALERT
+// --------------------------------------------------
+
+void emergencyAlert()
+{
+  digitalWrite(
+    BUZZER_PIN,
+    HIGH
+  );
+
+  digitalWrite(
+    STATUS_LED,
+    HIGH
+  );
+
+  delay(300);
+
+  digitalWrite(
+    BUZZER_PIN,
+    LOW
+  );
+
+  delay(200);
+}
+
+// --------------------------------------------------
+// RUDDER DIVERSION
+// --------------------------------------------------
+
+void activateRudderDiversion()
+{
+  /*
+    Prototype interface.
+
+    Actual servo/actuator control must be
+    calibrated according to the physical
+    rudder mechanism.
+  */
+
+  Serial.println(
+    "RUDDER DIVERSION REQUESTED"
+  );
+
+  digitalWrite(
+    RUDDER_PIN,
+    HIGH
+  );
+
+  delay(1000);
+
+  digitalWrite(
+    RUDDER_PIN,
+    LOW
+  );
+}
+
+// --------------------------------------------------
+// PROCESS WATCH DATA
+// --------------------------------------------------
+
+void processWatchData(
+  String data
+)
+{
+  Serial.println();
+  Serial.println(
+    "WATCH DATA RECEIVED:"
+  );
+
+  Serial.println(data);
+
+  // ------------------------------------------------
+  // Extract Heart Rate
+  // ------------------------------------------------
+
+  int hrIndex =
+      data.indexOf("HR:");
+
+  if (hrIndex >= 0)
+  {
+    int commaIndex =
+        data.indexOf(
+          ",",
+          hrIndex
+        );
+
+    String hrValue;
+
+    if (commaIndex >= 0)
+    {
+      hrValue =
+          data.substring(
+            hrIndex + 3,
+            commaIndex
+          );
+    }
+    else
+    {
+      hrValue =
+          data.substring(
+            hrIndex + 3
+          );
+    }
+
+    heartRate =
+        hrValue.toInt();
+  }
+
+  // ------------------------------------------------
+  // Extract Acceleration
+  // ------------------------------------------------
+
+  int accIndex =
+      data.indexOf("ACC:");
+
+  if (accIndex >= 0)
+  {
+    int commaIndex =
+        data.indexOf(
+          ",",
+          accIndex
+        );
+
+    String accValue;
+
+    if (commaIndex >= 0)
+    {
+      accValue =
+          data.substring(
+            accIndex + 4,
+            commaIndex
+          );
+    }
+    else
+    {
+      accValue =
+          data.substring(
+            accIndex + 4
+          );
+    }
+
+    acceleration =
+        accValue.toFloat();
+  }
+
+  // ------------------------------------------------
+  // Extract SOS
+  // ------------------------------------------------
+
+  int sosIndex =
+      data.indexOf("SOS:");
+
+  if (sosIndex >= 0)
+  {
+    int commaIndex =
+        data.indexOf(
+          ",",
+          sosIndex
+        );
+
+    String sosValue =
+        data.substring(
+          sosIndex + 4,
+          commaIndex
+        );
+
+    sosActive =
+        sosValue.toInt() == 1;
+  }
+
+  // ------------------------------------------------
+  // Extract FALL
+  // ------------------------------------------------
+
+  int fallIndex =
+      data.indexOf("FALL:");
+
+  if (fallIndex >= 0)
+  {
+    int commaIndex =
+        data.indexOf(
+          ",",
+          fallIndex
+        );
+
+    String fallValue;
+
+    if (commaIndex >= 0)
+    {
+      fallValue =
+          data.substring(
+            fallIndex + 5,
+            commaIndex
+          );
+    }
+    else
+    {
+      fallValue =
+          data.substring(
+            fallIndex + 5
+          );
+    }
+
+    fallDetected =
+        fallValue.toInt() == 1;
+  }
+
+  // ------------------------------------------------
+  // Extract Abnormal HR
+  // ------------------------------------------------
+
+  int abnormalIndex =
+      data.indexOf(
+        "ABNORMAL_HR:"
+      );
+
+  if (abnormalIndex >= 0)
+  {
+    String abnormalValue =
+        data.substring(
+          abnormalIndex + 12
+        );
+
+    abnormalHeartRate =
+        abnormalValue.toInt() == 1;
+  }
+
+  // ------------------------------------------------
+  // Emergency Detection
+  // ------------------------------------------------
+
+  if (
+    sosActive ||
+    fallDetected ||
+    abnormalHeartRate
+  )
+  {
+    emergencyActive = true;
+
+    Serial.println(
+      "!!! EMERGENCY CONDITION DETECTED !!!"
+    );
+
+    emergencyAlert();
+
+    /*
+      Rudder diversion is deliberately
+      not automatically triggered here.
+
+      Automatic vessel control requires
+      proper actuator calibration,
+      navigation logic and safety validation.
+    */
+  }
+}
+
+// --------------------------------------------------
+// BLE CALLBACK
+// --------------------------------------------------
+
+class WatchCallbacks :
+  public BLEAdvertisedDeviceCallbacks
+{
+  void onResult(
+    BLEAdvertisedDevice advertisedDevice
+  )
+  {
+    if (
+      advertisedDevice.haveServiceUUID() &&
+      advertisedDevice.isAdvertisingService(
+        BLEUUID(SERVICE_UUID)
+      )
+    )
+    {
+      Serial.println(
+        "Smart Watch detected."
+      );
+
+      watchConnected = true;
+
+      BLEDevice::getScan()->stop();
+
+      if (
+        advertisedDevice.haveName()
+      )
+      {
+        Serial.print(
+          "Device: "
+        );
+
+        Serial.println(
+          advertisedDevice.getName().c_str()
+        );
+      }
+    }
+  }
+};
+
+// --------------------------------------------------
+// GPS UPDATE
+// --------------------------------------------------
+
+void updateGPS()
+{
+  while (
+    GPSSerial.available()
+  )
+  {
+    gps.encode(
+      GPSSerial.read()
+    );
+  }
+
+  if (
+    gps.location.isUpdated()
+  )
+  {
+    latitude =
+        gps.location.lat();
+
+    longitude =
+        gps.location.lng();
+
+    gpsAvailable = true;
+
+    Serial.print(
+      "Latitude: "
+    );
+
+    Serial.println(
+      latitude,
+      6
+    );
+
+    Serial.print(
+      "Longitude: "
+    );
+
+    Serial.println(
+      longitude,
+      6
+    );
+  }
+}
+
+// --------------------------------------------------
+// SEND LORA MESSAGE
+// --------------------------------------------------
+
+void sendLoRaData()
+{
+  String message = "";
+
+  message += "SMART_SEA_BELT,";
+
+  message += "HR:";
+  message += String(heartRate);
+
+  message += ",ACC:";
+  message += String(
+    acceleration,
+    2
+  );
+
+  message += ",SOS:";
+  message += String(
+    sosActive ? 1 : 0
+  );
+
+  message += ",FALL:";
+  message += String(
+    fallDetected ? 1 : 0
+  );
+
+  message += ",ABNORMAL_HR:";
+  message += String(
+    abnormalHeartRate ? 1 : 0
+  );
+
+  message += ",LAT:";
+  message += String(
+    latitude,
+    6
+  );
+
+  message += ",LON:";
+  message += String(
+    longitude,
+    6
+  );
+
+  message += ",EMERGENCY:";
+  message += String(
+    emergencyActive ? 1 : 0
+  );
+
+  LoRaSerial.println(
+    message
+  );
+
+  Serial.println();
+  Serial.println(
+    "LoRa message sent:"
+  );
+
+  Serial.println(
+    message
+  );
+}
+
+// --------------------------------------------------
+// RESET EMERGENCY
+// --------------------------------------------------
+
+void resetEmergency()
+{
+  sosActive = false;
+  fallDetected = false;
+  abnormalHeartRate = false;
+
+  emergencyActive = false;
+
+  digitalWrite(
+    STATUS_LED,
+    LOW
+  );
+
+  Serial.println(
+    "Emergency status reset."
+  );
+}
+
+// --------------------------------------------------
+// SETUP
+// --------------------------------------------------
+
+void setup()
+{
+  Serial.begin(
+    115200
+  );
+
+  delay(1000);
+
+  Serial.println();
+  Serial.println(
+    "================================"
+  );
+
+  Serial.println(
+    "SMART SEA BELT"
+  );
+
+  Serial.println(
+    "BOAT HUB FIRMWARE"
+  );
+
+  Serial.println(
+    "================================"
+  );
+
+  // ------------------------------------------------
+  // GPIO
+  // ------------------------------------------------
+
+  pinMode(
+    BUZZER_PIN,
+    OUTPUT
+  );
+
+  pinMode(
+    STATUS_LED,
+    OUTPUT
+  );
+
+  pinMode(
+    RUDDER_PIN,
+    OUTPUT
+  );
+
+  digitalWrite(
+    BUZZER_PIN,
+    LOW
+  );
+
+  digitalWrite(
+    STATUS_LED,
+    LOW
+  );
+
+  digitalWrite(
+    RUDDER_PIN,
+    LOW
+  );
+
+  // ------------------------------------------------
+  // LoRa UART
+  // ------------------------------------------------
+
+  LoRaSerial.begin(
+    9600,
+    SERIAL_8N1,
+    LORA_RX,
+    LORA_TX
+  );
+
+  Serial.println(
+    "LoRa interface initialized."
+  );
+
+  // ------------------------------------------------
+  // GPS UART
+  // ------------------------------------------------
+
+  GPSSerial.begin(
+    9600,
+    SERIAL_8N1,
+    GPS_RX,
+    GPS_TX
+  );
+
+  Serial.println(
+    "GPS interface initialized."
+  );
+
+  // ------------------------------------------------
+  // BLE
+  // ------------------------------------------------
+
+  BLEDevice::init(
+    "SmartSeaBelt-BoatHub"
+  );
+
+  bleScan =
+      BLEDevice::getScan();
+
+  bleScan->setAdvertisedDeviceCallbacks(
+    new WatchCallbacks()
+  );
+
+  bleScan->setActiveScan(
+    true
+  );
+
+  bleScan->setInterval(
+    100
+  );
+
+  bleScan->setWindow(
+    80
+  );
+
+  Serial.println(
+    "BLE scanner initialized."
+  );
+
+  Serial.println();
+  Serial.println(
+    "Boat Hub Ready."
+  );
+}
+
+// --------------------------------------------------
+// MAIN LOOP
+// --------------------------------------------------
+
+void loop()
+{
+  // ------------------------------------------------
+  // GPS
+  // ------------------------------------------------
+
+  updateGPS();
+
+  // ------------------------------------------------
+  // BLE SCANNING
+  // ------------------------------------------------
+
+  if (
+    millis() - lastBLEScan >=
+    BLE_SCAN_INTERVAL
+  )
+  {
+    lastBLEScan = millis();
+
+    Serial.println(
+      "Scanning for Smart Watch..."
+    );
+
+    bleScan->start(
+      3,
+      false
+    );
+
+    bleScan->clearResults();
+  }
+
+  // ------------------------------------------------
+  // LoRa TRANSMISSION
+  // ------------------------------------------------
+
+  if (
+    millis() - lastLoRaSend >=
+    LORA_INTERVAL
+  )
+  {
+    lastLoRaSend =
+        millis();
+
+    sendLoRaData();
+  }
+
+  // ------------------------------------------------
+  // EMERGENCY STATUS
+  // ------------------------------------------------
+
+  if (
+    emergencyActive
+  )
+  {
+    digitalWrite(
+      STATUS_LED,
+      HIGH
+    );
+  }
+
+  delay(20);
+}
