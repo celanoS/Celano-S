@@ -1,0 +1,113 @@
+# Testing and Validation
+
+The Smart Sea Belt prototype was tested in a controlled backwater environment to evaluate the operation of the developed system and its major safety functions.
+
+## 1. Backwater Prototype Testing
+
+The prototype was subjected to controlled testing in a backwater environment to observe system operation under water-based conditions.
+
+### Tested Functions
+
+| Test Area | Purpose | Status |
+|---|---|---|
+| Smart Watch | Verify wearable system operation | Tested |
+| Heart-rate sensing | Verify sensor response | Tested |
+| Motion sensing | Verify motion-related detection | Tested |
+| SOS function | Verify emergency activation | Tested |
+| BLE communication | Verify Smart Watch communication with Boat Hub | Tested |
+| GPS | Verify location acquisition | Tested |
+| Boat Hub | Verify central processing and communication | Tested |
+| LoRa communication | Verify transmission toward Base Unit | Tested |
+| Emergency alert | Verify emergency notification | Tested |
+| Flotation mechanism | Verify controlled flotation response | Tested |
+| Rudder mechanism | Verify controlled actuator response | Tested |
+
+## 2. Testing Environment
+
+The prototype was evaluated in a controlled backwater environment as part of the project's practical testing and validation activities.
+
+The test focused on observing the prototype's functional behaviour and communication between the major system modules.
+
+## 3. System Testing Flow
+
+```text
+Smart Watch
+     ↓
+Sensor / SOS Event
+     ↓
+BLE Communication
+     ↓
+Boat Hub
+     ↓
+GPS + Emergency Processing
+     ↓
+LoRa Communication
+     ↓
+Base Unit
+     ↓
+Emergency Monitoring / Alert
+```
+
+## 4. Emergency Response Testing
+
+The emergency-response concept was evaluated through controlled testing of the relevant prototype mechanisms.
+
+The testing included:
+
+- SOS activation
+- Sensor-based event detection
+- Wearable-to-Boat Hub communication
+- Emergency information transmission
+- Location information
+- Flotation response
+- Rudder actuator response
+
+## 5. Test Evidence
+
+The repository should include the corresponding backwater test report, photographs, videos or other available evidence in the project documentation.
+
+Suggested structure:
+
+```text
+results/
+├── README.md
+├── backwater-test-report.pdf
+└── test-images/
+```
+
+## 6. Validation Status
+
+The backwater testing demonstrates prototype-level functional testing in a controlled water environment.
+
+It should not be interpreted as certification or proof of operational readiness for open-sea deployment.
+
+Further validation is required for:
+
+- Extended marine operation
+- Salt-water exposure
+- Water ingress
+- Communication reliability
+- Battery endurance
+- False-alarm performance
+- Actuator reliability
+- Flotation reliability
+- Vessel-specific rudder control
+- Applicable marine safety requirements
+
+## 7. Future Testing
+
+Further testing can evaluate:
+
+- Longer communication distances
+- Different environmental conditions
+- Multiple wearable units
+- Extended operating duration
+- Marine-grade enclosure performance
+- System recovery after communication loss
+- Emergency response time
+
+## Development Status
+
+**Prototype:** Developed and tested in a controlled backwater environment.
+
+**Further validation:** Required before real-world operational deployment.
