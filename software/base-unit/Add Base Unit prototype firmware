@@ -1,0 +1,488 @@
+/*
+  SMART SEA BELT
+  Base Unit Firmware - Prototype
+
+  Functions:
+  - Receive Boat Hub data through LoRa
+  - Parse emergency information
+  - Display received information through Serial Monitor
+  - Activate emergency buzzer/LED
+
+  NOTE:
+  Prototype firmware for development/testing.
+  Not a certified marine safety system.
+*/
+
+#define BUZZER_PIN 5
+#define STATUS_LED 6
+
+// LoRa UART
+#define LORA_RX 16
+#define LORA_TX 17
+
+HardwareSerial LoRaSerial(1);
+
+// --------------------------------------------------
+// VARIABLES
+// --------------------------------------------------
+
+String receivedMessage = "";
+
+int heartRate = 0;
+
+float acceleration = 0;
+
+bool sosActive = false;
+bool fallDetected = false;
+bool abnormalHeartRate = false;
+bool emergencyActive = false;
+
+float latitude = 0.0;
+float longitude = 0.0;
+
+// --------------------------------------------------
+// EMERGENCY ALERT
+// --------------------------------------------------
+
+void emergencyAlert()
+{
+  digitalWrite(
+    STATUS_LED,
+    HIGH
+  );
+
+  digitalWrite(
+    BUZZER_PIN,
+    HIGH
+  );
+
+  delay(300);
+
+  digitalWrite(
+    BUZZER_PIN,
+    LOW
+  );
+
+  delay(200);
+
+  digitalWrite(
+    BUZZER_PIN,
+    HIGH
+  );
+
+  delay(300);
+
+  digitalWrite(
+    BUZZER_PIN,
+    LOW
+  );
+}
+
+// --------------------------------------------------
+// GET FIELD FROM MESSAGE
+// --------------------------------------------------
+
+String getField(
+  String data,
+  String field
+)
+{
+  int start =
+      data.indexOf(field);
+
+  if (start < 0)
+  {
+    return "";
+  }
+
+  start += field.length();
+
+  int end =
+      data.indexOf(
+        ",",
+        start
+      );
+
+  if (end < 0)
+  {
+    end = data.length();
+  }
+
+  return data.substring(
+    start,
+    end
+  );
+}
+
+// --------------------------------------------------
+// PROCESS LORA MESSAGE
+// --------------------------------------------------
+
+void processLoRaMessage(
+  String message
+)
+{
+  Serial.println();
+  Serial.println(
+    "================================"
+  );
+
+  Serial.println(
+    "LORA MESSAGE RECEIVED"
+  );
+
+  Serial.println(
+    "================================"
+  );
+
+  Serial.println(message);
+
+  // ----------------------------------------------
+  // Heart Rate
+  // ----------------------------------------------
+
+  String hr =
+      getField(
+        message,
+        "HR:"
+      );
+
+  if (hr != "")
+  {
+    heartRate =
+        hr.toInt();
+  }
+
+  // ----------------------------------------------
+  // Acceleration
+  // ----------------------------------------------
+
+  String acc =
+      getField(
+        message,
+        "ACC:"
+      );
+
+  if (acc != "")
+  {
+    acceleration =
+        acc.toFloat();
+  }
+
+  // ----------------------------------------------
+  // SOS
+  // ----------------------------------------------
+
+  String sos =
+      getField(
+        message,
+        "SOS:"
+      );
+
+  if (sos != "")
+  {
+    sosActive =
+        sos.toInt() == 1;
+  }
+
+  // ----------------------------------------------
+  // Fall
+  // ----------------------------------------------
+
+  String fall =
+      getField(
+        message,
+        "FALL:"
+      );
+
+  if (fall != "")
+  {
+    fallDetected =
+        fall.toInt() == 1;
+  }
+
+  // ----------------------------------------------
+  // Abnormal Heart Rate
+  // ----------------------------------------------
+
+  String abnormal =
+      getField(
+        message,
+        "ABNORMAL_HR:"
+      );
+
+  if (abnormal != "")
+  {
+    abnormalHeartRate =
+        abnormal.toInt() == 1;
+  }
+
+  // ----------------------------------------------
+  // GPS
+  // ----------------------------------------------
+
+  String lat =
+      getField(
+        message,
+        "LAT:"
+      );
+
+  if (lat != "")
+  {
+    latitude =
+        lat.toFloat();
+  }
+
+  String lon =
+      getField(
+        message,
+        "LON:"
+      );
+
+  if (lon != "")
+  {
+    longitude =
+        lon.toFloat();
+  }
+
+  // ----------------------------------------------
+  // Emergency
+  // ----------------------------------------------
+
+  String emergency =
+      getField(
+        message,
+        "EMERGENCY:"
+      );
+
+  if (emergency != "")
+  {
+    emergencyActive =
+        emergency.toInt() == 1;
+  }
+
+  displayStatus();
+}
+
+// --------------------------------------------------
+// DISPLAY STATUS
+// --------------------------------------------------
+
+void displayStatus()
+{
+  Serial.println();
+  Serial.println(
+    "SMART SEA BELT BASE UNIT"
+  );
+
+  Serial.println(
+    "----------------------------"
+  );
+
+  Serial.print(
+    "Heart Rate: "
+  );
+
+  Serial.print(
+    heartRate
+  );
+
+  Serial.println(
+    " BPM"
+  );
+
+  Serial.print(
+    "Acceleration: "
+  );
+
+  Serial.println(
+    acceleration
+  );
+
+  Serial.print(
+    "SOS: "
+  );
+
+  Serial.println(
+    sosActive ?
+    "ACTIVE" :
+    "NORMAL"
+  );
+
+  Serial.print(
+    "Fall: "
+  );
+
+  Serial.println(
+    fallDetected ?
+    "DETECTED" :
+    "NORMAL"
+  );
+
+  Serial.print(
+    "Abnormal HR: "
+  );
+
+  Serial.println(
+    abnormalHeartRate ?
+    "YES" :
+    "NO"
+  );
+
+  Serial.print(
+    "Latitude: "
+  );
+
+  Serial.println(
+    latitude,
+    6
+  );
+
+  Serial.print(
+    "Longitude: "
+  );
+
+  Serial.println(
+    longitude,
+    6
+  );
+
+  Serial.print(
+    "Emergency: "
+  );
+
+  Serial.println(
+    emergencyActive ?
+    "ACTIVE" :
+    "NORMAL"
+  );
+
+  Serial.println(
+    "----------------------------"
+  );
+
+  // ----------------------------------------------
+  // Emergency response
+  // ----------------------------------------------
+
+  if (
+    emergencyActive ||
+    sosActive ||
+    fallDetected ||
+    abnormalHeartRate
+  )
+  {
+    Serial.println();
+    Serial.println(
+      "!!! EMERGENCY ALERT !!!"
+    );
+
+    emergencyAlert();
+  }
+  else
+  {
+    digitalWrite(
+      STATUS_LED,
+      LOW
+    );
+  }
+}
+
+// --------------------------------------------------
+// SETUP
+// --------------------------------------------------
+
+void setup()
+{
+  Serial.begin(
+    115200
+  );
+
+  delay(1000);
+
+  Serial.println();
+  Serial.println(
+    "================================"
+  );
+
+  Serial.println(
+    "SMART SEA BELT"
+  );
+
+  Serial.println(
+    "BASE UNIT FIRMWARE"
+  );
+
+  Serial.println(
+    "================================"
+  );
+
+  // GPIO
+
+  pinMode(
+    BUZZER_PIN,
+    OUTPUT
+  );
+
+  pinMode(
+    STATUS_LED,
+    OUTPUT
+  );
+
+  digitalWrite(
+    BUZZER_PIN,
+    LOW
+  );
+
+  digitalWrite(
+    STATUS_LED,
+    LOW
+  );
+
+  // LoRa
+
+  LoRaSerial.begin(
+    9600,
+    SERIAL_8N1,
+    LORA_RX,
+    LORA_TX
+  );
+
+  Serial.println(
+    "LoRa receiver initialized."
+  );
+
+  Serial.println(
+    "Base Unit ready."
+  );
+}
+
+// --------------------------------------------------
+// MAIN LOOP
+// --------------------------------------------------
+
+void loop()
+{
+  if (
+    LoRaSerial.available()
+  )
+  {
+    receivedMessage =
+        LoRaSerial.readStringUntil(
+          '\n'
+        );
+
+    receivedMessage.trim();
+
+    if (
+      receivedMessage.length() > 0
+    )
+    {
+      processLoRaMessage(
+        receivedMessage
+      );
+    }
+  }
+
+  delay(20);
+}
