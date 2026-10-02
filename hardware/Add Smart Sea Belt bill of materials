@@ -1,0 +1,53 @@
+# Bill of Materials
+
+This document lists the major hardware components associated with the Smart Sea Belt prototype.
+
+## Smart Watch
+
+| Component | Quantity | Purpose |
+|---|---:|---|
+| ESP32-C3 | 1 per wearable | Main controller and BLE |
+| MAX30102 | 1 per wearable | Heart-rate sensing |
+| MPU6050 | 1 per wearable | Motion sensing |
+| SOS Button | 1 per wearable | Manual emergency activation |
+| Buzzer | 1 per wearable | Local alert |
+| Vibration/Indicator | 1 per wearable | User notification |
+| Battery | 1 per wearable | Power supply |
+
+## Boat Hub
+
+| Component | Quantity | Purpose |
+|---|---:|---|
+| ESP32-S3 | 1 | Central controller |
+| BLE interface | Integrated | Smart Watch communication |
+| GPS / NavIC module | 1 | Location awareness |
+| LoRa module | 1 | Long-range communication |
+| Display | 1 | System status |
+| Buzzer | 1 | Emergency alert |
+| Rudder actuator/interface | 1 | Diversion mechanism |
+
+## Base Unit
+
+| Component | Quantity | Purpose |
+|---|---:|---|
+| Controller | 1 | Data processing |
+| LoRa receiver/module | 1 | Boat Hub communication |
+| Display | 1 | Monitoring |
+| Buzzer | 1 | Emergency alert |
+| Power supply | 1 | System power |
+
+## Safety and Mechanical Components
+
+| Component | Purpose |
+|---|---|
+| Flotation mechanism | Emergency buoyancy support |
+| Marine protection/enclosure | Protection of electronics |
+| Rudder actuator assembly | Controlled diversion mechanism |
+| Wiring and connectors | Hardware integration |
+| Mounting components | Mechanical assembly |
+
+## Notes
+
+The exact quantities and specifications should be updated according to the components physically used in the prototype.
+
+This BOM is intended as a hardware documentation reference and should not be interpreted as a certified marine equipment specification.
