@@ -1,0 +1,160 @@
+# Smart Sea Belt
+
+## Integrated Wearable Marine Safety System
+
+Smart Sea Belt is a prototype marine safety system designed to support fishermen and other users exposed to water-related risks.
+
+The system integrates wearable sensing, short-range communication, long-range communication, emergency alerts, flotation support, and a rudder-diversion concept into a connected safety architecture.
+
+## Project Objective
+
+The project aims to reduce the time between detecting an emergency and initiating an appropriate safety response.
+
+## System Architecture
+
+```text
+Smart Watch
+     │
+     │ BLE
+     ▼
+Boat Hub
+     │
+     │ LoRa
+     ▼
+Base Unit
+     │
+     ▼
+Monitoring & Alerts
+```
+
+## Main Components
+
+### Smart Watch
+
+The wearable unit is designed to monitor:
+
+- Heart rate
+- Motion
+- Emergency SOS activation
+- Location-related information where supported
+
+The Smart Watch uses an ESP32-C3 as its controller and communicates with the Boat Hub using Bluetooth Low Energy.
+
+### Boat Hub
+
+The Boat Hub acts as the central processing and communication unit.
+
+Main functions include:
+
+- Receiving Smart Watch data
+- Processing emergency information
+- GPS-based location awareness
+- Long-range communication
+- Emergency alert processing
+- Interface for the rudder mechanism
+
+### Base Unit
+
+The Base Unit receives information from the Boat Hub and provides an additional monitoring and alert endpoint.
+
+## Communication
+
+| Communication | Purpose |
+|---|---|
+| BLE | Smart Watch → Boat Hub |
+| LoRa | Boat Hub → Base Unit |
+| GPS | Location information |
+| Future IoT | Remote monitoring and mobile application |
+
+## Emergency Functions
+
+The prototype architecture supports:
+
+- SOS emergency activation
+- Motion/fall-related event detection
+- Heart-rate monitoring
+- Emergency alerts
+- Flotation deployment
+- Rudder diversion concept
+- Location-aware emergency communication
+
+## Prototype Testing
+
+The Smart Sea Belt prototype was tested in a controlled backwater environment.
+
+Testing activities included evaluation of the prototype's major components and emergency-response functions.
+
+Detailed test information and supporting evidence are available in the [`results`](./results/) directory.
+
+## Repository Structure
+
+```text
+Smart-Sea-Belt/
+│
+├── README.md
+│
+├── docs/
+│   ├── architecture.md
+│   ├── testing.md
+│   └── project-report.pdf
+│
+├── hardware/
+│   └── README.md
+│
+├── software/
+│   ├── README.md
+│   │
+│   ├── smart-watch/
+│   │   ├── README.md
+│   │   └── src/
+│   │       └── main.ino
+│   │
+│   ├── boat-hub/
+│   │   ├── README.md
+│   │   └── src/
+│   │       └── main.ino
+│   │
+│   └── base-unit/
+│       ├── README.md
+│       └── src/
+│           └── main.ino
+│
+├── diagrams/
+│   └── README.md
+│
+├── images/
+│   └── README.md
+│
+└── results/
+    ├── README.md
+    ├── backwater-test-report.pdf
+    └── test-images/
+```
+
+## Development Status
+
+**Prototype developed and tested in a controlled backwater environment.**
+
+The repository contains the project's documentation, prototype firmware, architecture, and testing evidence.
+
+Further marine-environment testing, engineering validation, and applicable safety/regulatory assessment are required before operational deployment.
+
+## Future Development
+
+Potential future development includes:
+
+- Mobile application
+- Cloud monitoring
+- 4G connectivity
+- AI-assisted anomaly detection
+- Improved marine protection
+- Custom PCB
+- Improved power management
+- Multi-vessel monitoring
+- Enhanced emergency-response mechanisms
+
+## Project
+
+**Smart Sea Belt**
+
+An integrated approach to wearable marine safety, emergency communication, and response support.
