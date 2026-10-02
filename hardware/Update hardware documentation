@@ -1,0 +1,153 @@
+# Hardware
+
+This folder documents the hardware components used in the Smart Sea Belt prototype.
+
+## System Hardware
+
+The prototype is divided into three main hardware units:
+
+1. Smart Watch
+2. Boat Hub
+3. Base Unit
+
+## 1. Smart Watch
+
+| Component | Purpose |
+|---|---|
+| ESP32-C3 | Main controller and BLE communication |
+| MAX30102 | Heart-rate sensing |
+| MPU6050 | Motion sensing |
+| SOS Button | Manual emergency activation |
+| Buzzer | Local emergency alert |
+| Vibration/Indicator | Local user notification |
+| Battery | Portable power supply |
+
+### Smart Watch Flow
+
+```text
+MAX30102 ──┐
+            │
+MPU6050 ────┤
+            ▼
+        ESP32-C3
+            │
+       SOS Button
+            │
+            ▼
+           BLE
+            │
+            ▼
+        Boat Hub
+```
+
+## 2. Boat Hub
+
+| Component | Purpose |
+|---|---|
+| ESP32-S3 | Central controller |
+| BLE | Receives Smart Watch data |
+| GPS / NavIC | Location awareness |
+| LoRa Module | Long-range communication |
+| Buzzer | Emergency alert |
+| Display | System status |
+| Rudder Actuator Interface | Controls the diversion mechanism |
+
+### Boat Hub Flow
+
+```text
+Smart Watch
+     │
+     │ BLE
+     ▼
+ ESP32-S3
+     │
+ ┌───┴─────────┐
+ ▼             ▼
+ GPS           LoRa
+ │             │
+ ▼             ▼
+Location     Base Unit
+```
+
+## 3. Base Unit
+
+| Component | Purpose |
+|---|---|
+| Controller | Data processing |
+| LoRa Receiver | Receives Boat Hub messages |
+| Display | Safety information |
+| Buzzer | Emergency notification |
+| Power Supply | System power |
+
+### Base Unit Flow
+
+```text
+Boat Hub
+   │
+   │ LoRa
+   ▼
+LoRa Receiver
+   │
+   ▼
+Controller
+   │
+ ┌─┴───────┐
+ ▼         ▼
+Display   Buzzer
+```
+
+## 4. Emergency Mechanisms
+
+The prototype includes two physical safety mechanisms:
+
+### Flotation Mechanism
+
+The system includes a controlled flotation deployment concept intended to provide additional buoyancy during an emergency.
+
+### Rudder Diversion
+
+The rudder mechanism is designed to support controlled vessel direction change during an emergency.
+
+The rudder mechanism requires vessel-specific engineering, control limits, manual override and safety validation before real-world deployment.
+
+## 5. Hardware Integration
+
+```text
+┌─────────────────────┐
+│     SMART WATCH     │
+│                     │
+│ ESP32-C3            │
+│ MAX30102            │
+│ MPU6050             │
+│ SOS                 │
+└──────────┬──────────┘
+           │
+           │ BLE
+           ▼
+┌─────────────────────┐
+│      BOAT HUB       │
+│                     │
+│ ESP32-S3             │
+│ GPS                  │
+│ BLE                  │
+│ LoRa                 │
+│ Rudder Interface     │
+└──────────┬──────────┘
+           │
+           │ LoRa
+           ▼
+┌─────────────────────┐
+│      BASE UNIT      │
+│                     │
+│ LoRa Receiver       │
+│ Controller          │
+│ Display             │
+│ Buzzer              │
+└─────────────────────┘
+```
+
+## Hardware Status
+
+The repository documents the prototype hardware architecture and the components specified for the Smart Sea Belt system.
+
+Actual component specifications, wiring, pin assignments and measured performance should be updated based on the hardware used during prototype testing.
