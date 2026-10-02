@@ -1,0 +1,54 @@
+# Smart Sea Belt – System Diagrams
+
+This folder contains the system architecture and communication diagrams of the Smart Sea Belt prototype.
+
+## System Architecture
+
+The Smart Sea Belt consists of three major modules:
+
+1. Smart Watch
+2. Boat Hub
+3. Base Unit
+
+## Communication Architecture
+
+```text
+Smart Watch
+     │
+     │ BLE
+     ▼
+ Boat Hub
+     │
+     │ LoRa
+     ▼
+ Base Unit
+
+OVERALL SYSTEM
+
+┌─────────────────┐
+│   Smart Watch   │
+│ GPS             │
+│ Heart Rate      │
+│ Motion Sensor   │
+│ SOS             │
+└────────┬────────┘
+         │
+        BLE
+         │
+         ▼
+┌─────────────────┐
+│    Boat Hub     │
+│ ESP32-S3        │
+│ Data Processing │
+│ LoRa            │
+└────────┬────────┘
+         │
+        LoRa
+         │
+         ▼
+┌─────────────────┐
+│    Base Unit    │
+│ Monitoring      │
+│ Alert System    │
+└─────────────────┘
+
